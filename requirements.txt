@@ -1,0 +1,20 @@
+langchain==0.1.0
+langchain-core==0.1.23
+langchain-openai==0.0.6
+langchain-community==0.0.20
+langgraph==0.0.26
+openai==1.109.1
+python-dotenv==1.0.0
+pydantic==2.11.10
+faiss-cpu==1.13.2
+google-search-results==2.4.2
+wikipedia==1.4.0
+arxiv==2.4.0
+feedparser==6.0.12
+beautifulsoup4==4.12.0
+requests==2.32.5
+rich==13.7.0
+numpy==1.26.4
+tiktoken==0.8.0
+# chromadb==1.1.1  # Uncomment if using ChromaDB
+# sentence-transformers==2.2.2  # Uncomment if using embeddings
