@@ -103,11 +103,11 @@ graph TD
 #### **Step 1: Memory Retrieval** 🧠
 ```mermaid
 flowchart LR
-    A[Query Received] --> B{Long-term Memory\nEnabled?}
-    B -->|Yes| C[Vector Search\nFAISS]
+    A[Query Received] --> B{"Long-term Memory<br>Enabled?"}
+    B -->|Yes| C["Vector Search<br>FAISS"]
     B -->|No| D[Skip]
-    C --> E[Retrieve Relevant\nPast Interactions]
-    E --> F[Get Short-term\nChat History]
+    C --> E["Retrieve Relevant<br>Past Interactions"]
+    E --> F["Get Short-term<br>Chat History"]
     D --> F
     F --> G[Context Ready]
     
@@ -132,7 +132,7 @@ chat_history = self.memory.get_short_term_history()
 ```mermaid
 flowchart TD
     A[Agent Executor] --> B[Parse Query]
-    B --> C{Which Tools\nNeeded?}
+    B --> C{"Which Tools<br>Needed?"}
     C -->|Current Events| D[web_search]
     C -->|Background Info| E[wikipedia]
     C -->|Scientific| F[arxiv_search]
@@ -146,7 +146,7 @@ flowchart TD
     H --> I
     
     I --> J[Collect Observations]
-    J --> K{Max Iterations\nReached?}
+    J --> K{"Max Iterations<br>Reached?"}
     K -->|No| C
     K -->|Yes| L[Return Results]
     
@@ -178,7 +178,7 @@ flowchart LR
     A[Intermediate Steps] --> B[Extract Observations]
     B --> C[Filter Relevant Data]
     C --> D[Extract Sources]
-    D --> E{Data Quality\nCheck}
+    D --> E{"Data Quality<br>Check"}
     E -->|Good| F[Organize Data]
     E -->|Poor| G[Flag for Review]
     F --> H[Structured Data]
@@ -211,12 +211,12 @@ sources = self._extract_sources(intermediate_steps)
 #### **Step 4: Deep Analysis** 🔬
 ```mermaid
 flowchart TD
-    A[Collected Data] --> B{Enable Deep\nAnalysis?}
+    A[Collected Data] --> B{"Enable Deep<br>Analysis?"}
     B -->|No| C[Skip Analysis]
     B -->|Yes| D[Parallel Analysis]
     
-    D --> E[Analysis Chain 1:\nStructured Analysis]
-    D --> F[Analysis Chain 2:\nQuality Check]
+    D --> E["Analysis Chain 1:<br>Structured Analysis"]
+    D --> F["Analysis Chain 2:<br>Quality Check"]
     
     E --> G[Key Findings]
     E --> H[Confidence Score]
@@ -351,11 +351,11 @@ flowchart LR
     B --> C[Store in Short-term]
     B --> D[Update Summary Memory]
     
-    C --> E{Every 5th\nInteraction?}
+    C --> E{"Every 5th<br>Interaction?"}
     E -->|Yes| F[Create Embedding]
     E -->|No| G[Skip Rebuild]
     
-    F --> H[Rebuild FAISS\nVectorstore]
+    F --> H["Rebuild FAISS<br>Vectorstore"]
     
     B --> I[Add Metadata]
     I --> J[Sources]
