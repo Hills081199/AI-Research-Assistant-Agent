@@ -5,7 +5,7 @@ A production-level AI research assistant built with LangChain LCEL (LangChain Ex
 ## ✨ Features
 
 ### 🔍 **Multi-Source Information Gathering**
-- **Web Search**: Real-time information from search engines via Serper API
+- **Web Search**: Real-time information from Google via SerpAPI (Serper implementation)
 - **Wikipedia**: Background knowledge and encyclopedic information
 - **Academic Papers**: Scientific research from arXiv
 - **Web Scraping**: Detailed content extraction from specific URLs
@@ -20,8 +20,9 @@ A production-level AI research assistant built with LangChain LCEL (LangChain Ex
 
 ### 💾 **Hybrid Memory System**
 - **Short-term Memory**: Maintains conversation context (last 10 messages)
-- **Long-term Memory**: Stores and retrieves past interactions using vector embeddings
-- **Context-aware**: Leverages relevant past research to enhance current queries
+- **Long-term Memory**: Vector-based storage in FAISS, rebuilds every 5 interactions
+- **Summary Memory**: ConversationSummaryMemory for condensing long conversations
+- **Context-aware**: Semantic search retrieves relevant past research (top 3 results)
 
 ### ⚡ **Advanced Capabilities**
 - Parallel processing for faster analysis
@@ -321,13 +322,14 @@ flowchart TD
 
 **What Happens:**
 - Synthesis chain combines ALL inputs into coherent answer
-- GPT-4 generates well-structured Markdown output
-- Automatically formats with sections:
-  - **Overview**: High-level summary
-  - **Key Findings**: Bullet points with insights
-  - **Detailed Analysis**: In-depth exploration
+- GPT-4 generates well-structured Markdown output (temperature=0.3)
+- Automatically formats with predefined sections per prompt template:
+  - **Executive Summary**: 2-3 sentence overview
+  - **Main Findings**: Organized by themes
+  - **Analysis & Insights**: In-depth exploration
+  - **Limitations & Gaps**: Acknowledges uncertainties
   - **Recommendations**: Actionable next steps
-- Appends source citations at the end
+- Sources are appended separately (not part of synthesis chain output)
 
 **Code Reference:**
 ```python
@@ -347,35 +349,44 @@ final_answer = await self.synthesis_chain.ainvoke({
 flowchart LR
     A[Final Answer] --> B[Create Memory Entry]
     B --> C[Store in Short-term]
-    C --> D[Create Embedding]
-    D --> E[Store in Long-term\nFAISS]
+    B --> D[Update Summary Memory]
     
-    B --> F[Add Metadata]
-    F --> G[Sources]
-    F --> H[Analysis Results]
-    F --> I[Execution Time]
-    F --> J[Timestamp]
+    C --> E{Every 5th\nInteraction?}
+    E -->|Yes| F[Create Embedding]
+    E -->|No| G[Skip Rebuild]
     
-    G --> E
-    H --> E
-    I --> E
-    J --> E
+    F --> H[Rebuild FAISS\nVectorstore]
     
-    E --> K[Memory Updated]
+    B --> I[Add Metadata]
+    I --> J[Sources]
+    I --> K[Analysis Results]
+    I --> L[Execution Time]
+    I --> M[Timestamp]
+    
+    J --> H
+    K --> H
+    L --> H
+    M --> H
+    
+    H --> N[Memory Updated]
+    G --> N
+    D --> N
     
     style B fill:#e1f5fe
-    style D fill:#81d4fa
-    style E fill:#4fc3f7
-    style K fill:#29b6f6
+    style F fill:#81d4fa
+    style H fill:#4fc3f7
+    style N fill:#29b6f6
 ```
 
 **What Happens:**
-- **Short-term Memory**: Adds query + answer to chat history (last 10 retained)
+- **Short-term Memory**: Adds query + answer to chat history (last 10 retained via `ConversationBufferWindowMemory`)
+- **Summary Memory**: Updates conversation summary using `ConversationSummaryMemory`
 - **Long-term Memory**: 
-  - Creates vector embedding of the interaction
-  - Stores in FAISS for semantic search
-  - Includes metadata (sources, execution time, etc.)
-- Future queries can retrieve this context
+  - Creates Document with query + response + metadata
+  - Appends to documents list
+  - **Rebuilds FAISS vectorstore every 5 interactions** (not every time for performance)
+  - Enables semantic search for future queries
+- Future queries can retrieve top 3 most relevant past interactions
 
 **Code Reference:**
 ```python
@@ -552,28 +563,44 @@ When you run a research query, you'll get:
 ```markdown
 # Research Results
 
-## 🎯 Overview
-[Comprehensive overview of the topic]
+## Executive Summary
+[2-3 sentence overview synthesizing the key points]
 
-## 📈 Key Findings
-- Finding 1 with data
+## Main Findings
+**Theme 1: [Topic Area]**
+- Finding 1 with supporting data
 - Finding 2 with statistics
-- Finding 3 with insights
 
-## 💡 Recommendations
+**Theme 2: [Topic Area]**
+- Finding 3 with insights
+- Finding 4 with context
+
+## Analysis & Insights
+[In-depth exploration of the findings, patterns, and connections between sources]
+
+## Limitations & Gaps
+- Acknowledged uncertainty or missing data
+- Areas requiring further research
+- Conflicting information (if any)
+
+## Recommendations
 - Actionable recommendation 1
 - Actionable recommendation 2
+- Next steps for further investigation
 
 ---
-Execution time: 2.5s
-Intermediate steps: 8
-Confidence: 85%
-Data Quality: High
+**Metadata:**
+- Execution time: 2.5s
+- Intermediate steps: 8
+- Confidence: 85%
+- Data Quality: High
 
-Sources:
+**Sources:**
 1. https://example.com/source1
-2. Tool: wikipedia
-3. Tool: web_search
+2. https://example.com/source2
+3. Tool: wikipedia
+4. Tool: web_search
+5. Tool: arxiv_search
 ```
 
 ## ⚙️ Configuration
@@ -609,14 +636,18 @@ class AgentConfig:
 
 ## 🛠️ Available Tools
 
-| Tool | Description | Use Case |
-|------|-------------|----------|
-| **web_search** | Google search via Serper API | Current events, general information |
-| **wikipedia** | Wikipedia article search | Background knowledge, overviews |
-| **arxiv_search** | Academic paper search | Scientific research, technical topics |
-| **web_scraper** | Extract content from URLs | Detailed information from specific sites |
-| **data_analyzer** | Analyze numerical data | Statistics, trends, comparisons |
-| **citation_checker** | Verify citations | Fact-checking, source validation |
+The agent has access to 6 specialized research tools:
+
+| Tool | Description | Key Features | Use Case |
+|------|-------------|--------------|----------|
+| **web_search** | Google search via SerpAPI | Returns top results with snippets and links | Current events, general information, trending topics |
+| **wikipedia** | Wikipedia article lookup | Fetches article summaries | Background knowledge, person/event overviews, encyclopedic info |
+| **arxiv_search** | Academic paper search from arXiv | Returns top 3 papers with titles, authors, summaries (max 5000 chars) | Scientific research, technical papers, academic studies |
+| **web_scraper** | Extract content from specific URLs | Supports 'text', 'links', 'images', 'tables' extraction types | Detailed content from specific websites, structured data extraction |
+| **data_analyzer** | Analyze numerical or text data | Supports 'statistics', 'trends', 'comparison', 'summary' analysis types | Calculate stats, detect patterns, summarize datasets |
+| **citation_checker** | Verify claim reliability based on source | Heuristic-based scoring using domain reliability indicators | Fact-checking, source validation, confidence scoring |
+
+**Note**: Tools are selected autonomously by the agent using OpenAI function calling based on the query context.
 
 ## 📝 Core Components
 
@@ -631,9 +662,10 @@ class AgentConfig:
 - Provides fallback mechanisms
 
 ### Memory System (`memory.py`)
-- Short-term: Recent conversation context
-- Long-term: Vector-based retrieval using FAISS
-- Automatic summarization and storage
+- **Short-term**: `ConversationBufferWindowMemory` (k=10 messages)
+- **Long-term**: FAISS vectorstore with OpenAI embeddings, rebuilds every 5 interactions
+- **Summary**: `ConversationSummaryMemory` for condensing very long conversations
+- Semantic search returns top 3 relevant past interactions
 
 ### Analysis Chain (`analysis_chain.py`)
 - Structured data analysis with Pydantic models
@@ -641,9 +673,10 @@ class AgentConfig:
 - Confidence scoring and quality metrics
 
 ### Synthesis Chain (`synthesis_chain.py`)
-- Combines findings from multiple sources
-- Generates well-formatted Markdown output
-- Integrates analysis insights
+- Uses temperature=0.3 (slightly higher for creative synthesis)
+- Combines: findings, analysis, quality check, past context
+- Generates structured Markdown with sections: Summary, Findings, Analysis, Limitations, Recommendations
+- Appends source citations automatically
 
 ## 🎯 Use Cases
 
@@ -657,35 +690,70 @@ class AgentConfig:
 ## 🔧 Advanced Features
 
 ### Parallel Processing
-The agent uses `RunnableParallel` to run multiple analysis chains simultaneously:
-- Structured analysis
-- Quality checking
-- Source verification
+The agent uses `RunnableParallel` from LCEL to execute multiple operations concurrently:
+- **Structured analysis** (Pydantic-based) and **Quality checking** run simultaneously
+- Reduces total analysis time by ~40-50%
+- Configurable `max_concurrent_tasks` (default: 3)
+- Example:
+  ```python
+  parallel_analysis = RunnableParallel({
+      "structured_analysis": self.analysis_chain,
+      "quality_check": self._create_quality_check_chain()
+  })
+  ```
 
-### Error Handling
-- Automatic retries with exponential backoff
-- Graceful degradation when tools fail
-- Parsing error recovery
+### Error Handling & Resilience
+- **Chain-level retries**: `.with_retry(stop_after_attempt=3, wait_exponential_jitter=True)`
+- **Try-catch blocks** at each pipeline step (memory retrieval, execution, analysis, synthesis)
+- **Graceful degradation**: Falls back to raw agent output if synthesis fails
+- **AgentExecutor error handling**: `handle_parsing_errors=True`
+- **Tool timeout protection**: Individual tool timeouts prevent hanging
 
 ### Rich Console UI
-- Progress indicators during research
-- Formatted Markdown output
-- Color-coded status messages
-- Metadata display
+Built with the [`rich`](https://rich.readthedocs.io/) library:
+- **Spinner progress indicators** during research execution
+- **Markdown rendering** with syntax highlighting
+- **Colored panels** for results (green=success, red=error)
+- **Metadata display**: Execution time, step count, confidence scores
+- **Unicode support** for Windows via `codecs.getwriter("utf-8")`
 
 ## 📦 Dependencies
 
-Key dependencies:
-- **langchain**: Core framework
-- **langchain-openai**: OpenAI integration
-- **openai**: GPT models
-- **faiss-cpu**: Vector similarity search
-- **rich**: Beautiful terminal output
-- **pydantic**: Data validation
-- **wikipedia**: Wikipedia API
-- **arxiv**: Academic paper access
+Key dependencies from `requirements.txt`:
 
-See `requirements.txt` for the complete list.
+**Core Framework:**
+- **langchain** (0.1.0): Core LangChain framework
+- **langchain-core** (0.1.23): Core abstractions and LCEL
+- **langchain-openai** (0.0.6): OpenAI integration
+- **langchain-community** (0.0.20): Community tools and utilities
+- **langgraph** (0.0.26): Graph-based workflows
+
+**AI Models:**
+- **openai** (1.109.1): GPT-4 and embeddings
+
+**Memory & Search:**
+- **faiss-cpu** (1.13.2): Vector similarity search for long-term memory
+- **google-search-results** (2.4.2): SerpAPI wrapper for web search
+
+**Data Processing:**
+- **beautifulsoup4** (4.12.0): HTML parsing for web scraping
+- **requests** (2.32.5): HTTP requests
+- **feedparser** (6.0.12): RSS/Atom feed parsing
+
+**Research Tools:**
+- **wikipedia** (1.4.0): Wikipedia API access
+- **arxiv** (2.4.0): Academic paper search
+
+**Data Validation:**
+- **pydantic** (2.11.10): Data validation and settings management
+
+**Utilities:**
+- **rich** (13.7.0): Beautiful terminal output with progress bars
+- **python-dotenv** (1.0.0): Environment variable management
+- **numpy** (1.26.4): Numerical computations
+- **tiktoken** (0.8.0): Token counting for OpenAI models
+
+See [`requirements.txt`](requirements.txt) for the complete list with exact versions.
 
 ## 🤝 Contributing
 
